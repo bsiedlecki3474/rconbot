@@ -1,0 +1,26 @@
+{
+    "version": "1.0",
+    "token": "insert token",
+    "adminRoleId": "insert admin role id",
+    "prefix": "rcon",
+    "messageChannelId": "insert message channel id",
+    "botStatus": {
+        "type": "online",
+        "name": "rcon commands",
+        "activity": "LISTENING"
+    },
+    "servers": {
+        "srv1": {
+            "name": "srv1",
+            "address": "12.345.678.90:27015",
+            "password": "yourpassword1"
+        },
+        "srv2": {
+            "name": "srv2",
+            "address": "09.876.543.21:27015",
+            "password": "yourpassword2"
+        }
+    },
+
+    "debug": true
+}

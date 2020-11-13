@@ -1,0 +1,15 @@
+{
+  "name": "rconbot",
+  "version": "1.0.0",
+  "description": "RCON bot for csgo",
+  "main": "index.js",
+  "scripts": {
+    "test": "node index.js"
+  },
+  "author": "emKay#9189",
+  "license": "ISC",
+  "dependencies": {
+    "discord.js": "^12.4.1",
+    "srcds-rcon": "^2.2.1"
+  }
+}
