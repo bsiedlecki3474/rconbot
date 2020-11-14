@@ -21,23 +21,11 @@ client.on('message', message => {
             welcomeMessage += `\n${cfg.prefix}.prefix.change(newprefix): change current prefix to newprefix. [${rolename}]`
             welcomeMessage += `\n${cfg.prefix}.access: show additional priviledges role. [${rolename}]`
             welcomeMessage += `\n${cfg.prefix}.access.change(newrole): change current additional priviledges role to newrole. [${rolename}]`
+            welcomeMessage += `\n${cfg.prefix}.servername.command: runs command on servername. [${rolename}]\nAvailable servers:`
+                            + Object.keys(cfg.servers).map(key => `\n- ${key} (${cfg.servers[key].name})`) 
         }
 
-        welcomeMessage += `\n${cfg.prefix}.cc: show current country code.`
-        welcomeMessage += `\n${cfg.prefix}.cc.list | ${cfg.prefix}.ccs | ${cfg.prefix}.countrycodes: list of country codes.`
-        if (message.member.roles.cache.has(cfg.adminRoleId))
-            welcomeMessage += `\n${cfg.prefix}.cc.change: change country code. [${rolename}]`
-
-        welcomeMessage += `\n${cfg.prefix}.messagetime | ${cfg.prefix}.messagetime.show: show current message time.`
-        if (message.member.roles.cache.has(cfg.adminRoleId))
-            welcomeMessage += `\n${cfg.prefix}.messagetime.change(newtime): change message time to newtime. [${rolename}]`
-
-        welcomeMessage += `\n${cfg.prefix}.today(countryCode = ${cfg.cc}): today\'s statistics (optionally in ${cfg.cc}).`
-        welcomeMessage += `\n${cfg.prefix}.on(\"yyyy-mm-dd\", countryCode = ${cfg.cc}): statistics for \"yyyy-mm-dd\" (optionally in ${cfg.cc}).`
-        welcomeMessage += `\n${cfg.prefix}.in(countryCode = ${cfg.cc}): overall statistics for ${cfg.cc}.`
-        welcomeMessage += `\n${cfg.prefix}.all: overall statistics.`
-        if (message.member.roles.cache.has(cfg.adminRoleId))
-            welcomeMessage += `\n${cfg.prefix}.reload: reloads api data. [${rolename}]\`\`\``
+        welcomeMessage += '\`\`\`'
     
         message.channel.send(welcomeMessage)
     }
@@ -98,7 +86,6 @@ client.on('message', message => {
                 message.channel.send(`Prefix changed: **${oldprefix}** -> **${cfg.prefix}**`)
             } break;
         default:
-            console.log('hit3');
             if (message.member.roles.cache.has(cfg.adminRoleId)) {
                 if (Object.keys(cfg.servers).includes(fn.name)) {
                     const { name, address, password } = cfg.servers[fn.name]
@@ -107,10 +94,7 @@ client.on('message', message => {
                     let rcon = connect({ address, password })
         
                     rcon.connect().then(
-                        () => {
-                            console.log('hit4');
-                            return rcon.command(command).then(response => message.channel.send(`\`${response}\``))
-                        }
+                        () => rcon.command(command).then(response => message.channel.send(`\`${response}\``))
                     ).then(
                         () => rcon.disconnect()
                     ).catch(err => {
@@ -120,8 +104,8 @@ client.on('message', message => {
                             console.log(err.stack);
                         }
                     });
-                } else console.log('hit1')
-            } else console.log('hit2')
+                }
+            }
             break;
     }
 });
