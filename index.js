@@ -50,64 +50,67 @@ client.on('message', message => {
     const fn = getFunc(cmd[0]);
     const method = cmd[1] ? getFunc(cmd[1]) : null;
 
-    switch (fn.name) {
-        case 'clear':
-            if (message.member.roles.cache.has(cfg.adminRoleId)) {
-                async function clear() {
-                    message.delete()
-                    const limit = fn.args && fn.args.length === 1 && parseInt(fn.args[0]) < 99 ? parseInt(fn.args[0]) : 99;
-                    const fetched = await message.channel.messages.fetch({ limit })
-                    message.channel.bulkDelete(fetched)
+    if (message.channel.id === cfg.messageChannelId) {
+        switch (fn.name) {
+            case 'clear':
+                if (message.member.roles.cache.has(cfg.adminRoleId)) {
+                    async function clear() {
+                        message.delete().catch(e => message.channel.send('Missing permissions :('))
+                        const limit = fn.args && fn.args.length === 1 && parseInt(fn.args[0]) < 99 ? parseInt(fn.args[0]) : 99;
+                        const fetched = await message.channel.messages.fetch({ limit })
+                        message.channel.bulkDelete(fetched)
+                    }
+                    clear();  
+                } break;
+            case 'access':
+                if (message.member.roles.cache.has(cfg.adminRoleId)) {
+                    let rolename = message.guild.roles.cache.get(cfg.adminRoleId).name
+                    if (!method || !method.name || method.name === 'show') {
+                        message.channel.send(`Additional priviledges role: *${rolename}*`)
+                    } else if (method.name === 'change' && method.args && method.args.length === 1) {
+                        let newAdminRole = message.guild.roles.cache.get(method.args[0])
+                        if (newAdminRole) {
+                            let previousRolename = rolename
+                            cfg.adminRoleId = method.args[0]
+                            message.channel.send(`Additional priviledges role changed: ${previousRolename} -> ${newAdminRole}.`)
+                        } else message.channel.send('Invalid role ID.')
+                    }
+                } break;
+            case 'help': help(); break;
+            case 'prefix':
+                if (!method || !method.name || method.name === 'show')
+                    message.channel.send(`Current prefix: **${cfg.prefix}**\nChange prefix: \`${cfg.prefix}.prefix.change(newprefix)\``)
+    
+                else if (method.name === 'change' && method.args && method.args.length === 1)  {
+                    let oldprefix = cfg.prefix
+                    cfg.prefix = method.args[0]
+                    message.channel.send(`Prefix changed: **${oldprefix}** -> **${cfg.prefix}**`)
+                } break;
+            default:
+                if (message.member.roles.cache.has(cfg.adminRoleId)) {
+                    if (Object.keys(cfg.servers).includes(fn.name)) {
+                        const { name, address, password } = cfg.servers[fn.name]
+    
+                        let command = (!method || !method.name) ? 'status' : method.name
+                        let rcon = connect({ address, password })
+            
+                        rcon.connect().then(
+                            () => rcon.command(command).then(response => message.channel.send(`\`${response}\``))
+                        ).then(
+                            () => rcon.disconnect()
+                        ).catch(err => {
+                            message.channel.send('Error: ' + err)
+                            if (cfg.debug) {
+                                console.log('caught', err);
+                                console.log(err.stack);
+                            }
+                        });
+                    }
                 }
-                clear();  
-            } break;
-        case 'access':
-            if (message.member.roles.cache.has(cfg.adminRoleId)) {
-                let rolename = message.guild.roles.cache.get(cfg.adminRoleId).name
-                if (!method || !method.name || method.name === 'show') {
-                    message.channel.send(`Additional priviledges role: *${rolename}*`)
-                } else if (method.name === 'change' && method.args && method.args.length === 1) {
-                    let newAdminRole = message.guild.roles.cache.get(method.args[0])
-                    if (newAdminRole) {
-                        let previousRolename = rolename
-                        cfg.adminRoleId = method.args[0]
-                        message.channel.send(`Additional priviledges role changed: ${previousRolename} -> ${newAdminRole}.`)
-                    } else message.channel.send('Invalid role ID.')
-                }
-            } break;
-        case 'help': help(); break;
-        case 'prefix':
-            if (!method || !method.name || method.name === 'show')
-                message.channel.send(`Current prefix: **${cfg.prefix}**\nChange prefix: \`${cfg.prefix}.prefix.change(newprefix)\``)
-
-            else if (method.name === 'change' && method.args && method.args.length === 1)  {
-                let oldprefix = cfg.prefix
-                cfg.prefix = method.args[0]
-                message.channel.send(`Prefix changed: **${oldprefix}** -> **${cfg.prefix}**`)
-            } break;
-        default:
-            if (message.member.roles.cache.has(cfg.adminRoleId)) {
-                if (Object.keys(cfg.servers).includes(fn.name)) {
-                    const { name, address, password } = cfg.servers[fn.name]
-
-                    let command = (!method || !method.name) ? 'status' : method.name
-                    let rcon = connect({ address, password })
-        
-                    rcon.connect().then(
-                        () => rcon.command(command).then(response => message.channel.send(`\`${response}\``))
-                    ).then(
-                        () => rcon.disconnect()
-                    ).catch(err => {
-                        message.channel.send('Error: ' + err)
-                        if (cfg.debug) {
-                            console.log('caught', err);
-                            console.log(err.stack);
-                        }
-                    });
-                }
-            }
-            break;
+                break;
+        }
     }
+    
 });
 
 client.login(cfg.token)
