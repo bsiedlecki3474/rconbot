@@ -1,116 +1,141 @@
-const Discord = require('discord.js')
-const client = new Discord.Client()
+const { Client, Collection, Events, GatewayIntentBits, SlashCommandBuilder, RateLimitError } = require('discord.js');
+const { channelId, adminRoleId, token, servers } = require('./config.json');
 const connect = require('srcds-rcon');
-const cfg = require('./config.json');
 
-let cases = [];
+const loadCommands = require('./loadCommands.js');
 
-client.on('ready', async () => {
-    if (cfg.debug) console.log("Successfully logged: " + client.user.tag)
-    client.user.setStatus(cfg.botStatus.type)
-    client.user.setActivity(cfg.botStatus.name, { type: cfg.botStatus.activity })
-})
+const client = new Client({ intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent
+]});
 
-client.on('message', message => {
-    help = () => {
-        let rolename = message.guild.roles.cache.get(cfg.adminRoleId).name
+client.commands = new Collection();
 
-        let welcomeMessage = `Version: **${cfg.version}**\nAuthor: **emKay#9189**\n\nList of commands:\n\`\`\`ldif`
-        welcomeMessage += `\n${cfg.prefix}.prefix | ${cfg.prefix}.prefix.show: show current prefix.`
-        if (message.member.roles.cache.has(cfg.adminRoleId)) {
-            welcomeMessage += `\n${cfg.prefix}.prefix.change(newprefix): change current prefix to newprefix. [${rolename}]`
-            welcomeMessage += `\n${cfg.prefix}.access: show additional priviledges role. [${rolename}]`
-            welcomeMessage += `\n${cfg.prefix}.access.change(newrole): change current additional priviledges role to newrole. [${rolename}]`
-            welcomeMessage += `\n${cfg.prefix}.servername.command: runs command on servername. [${rolename}]\nAvailable servers:`
-                            + Object.keys(cfg.servers).map(key => `\n- ${key} (${cfg.servers[key].name})`) 
-        }
+let rcon = null;
+let serverName = null;
 
-        welcomeMessage += '\`\`\`'
-    
-        message.channel.send(welcomeMessage)
-    }
+const commands = [
+    {
+        data: new SlashCommandBuilder()
+            .setName('connect')
+            .setDescription('Connect to a server via RCON')
+            .addStringOption(option => option
+                .setName('server')
+                .setDescription('Server name')
+                .setRequired(true)
+                .addChoices(...Object.keys(servers)?.map(key => ({
+                    name: servers[key].name,
+                    value: key
+                })))
+            ),
+        execute: async (interaction) => {
+            const server = interaction.options.getString('server');
+            if (!server) {
+                interaction.reply('No server provided.');
+                return;
+            }
 
-    if (!message.content.startsWith(cfg.prefix) || message.author.bot)
-        return;
+            const { name, address, password } = servers[server];
 
-    if (message.content === cfg.prefix) help()
-
-    const cmd = message.content.slice(cfg.prefix.length+1).trim().toLowerCase().split(/\.+/g)
-
-    const getFunc = (cmd, method = '') => {
-        const rgxp = new RegExp(`${method}(.*)?\\((.*)?\\)`, "g")
-        const matches = rgxp.exec(cmd)
-
-        return {
-            ...{name: matches ? matches[1] : cmd},
-            ...matches && {args: matches[2] ? matches[2].replace(/['"\s]+/g, '').split(',') : []}
-        };
-    }
-
-    const fn = getFunc(cmd[0]);
-    const method = cmd[1] ? getFunc(cmd[1]) : null;
-
-    if (message.channel.id === cfg.messageChannelId) {
-        switch (fn.name) {
-            case 'clear':
-                if (message.member.roles.cache.has(cfg.adminRoleId)) {
-                    async function clear() {
-                        message.delete().catch(e => message.channel.send('Missing permissions :('))
-                        const limit = fn.args && fn.args.length === 1 && parseInt(fn.args[0]) < 99 ? parseInt(fn.args[0]) : 99;
-                        const fetched = await message.channel.messages.fetch({ limit })
-                        message.channel.bulkDelete(fetched)
-                    }
-                    clear();  
-                } break;
-            case 'access':
-                if (message.member.roles.cache.has(cfg.adminRoleId)) {
-                    let rolename = message.guild.roles.cache.get(cfg.adminRoleId).name
-                    if (!method || !method.name || method.name === 'show') {
-                        message.channel.send(`Additional priviledges role: *${rolename}*`)
-                    } else if (method.name === 'change' && method.args && method.args.length === 1) {
-                        let newAdminRole = message.guild.roles.cache.get(method.args[0])
-                        if (newAdminRole) {
-                            let previousRolename = rolename
-                            cfg.adminRoleId = method.args[0]
-                            message.channel.send(`Additional priviledges role changed: ${previousRolename} -> ${newAdminRole}.`)
-                        } else message.channel.send('Invalid role ID.')
-                    }
-                } break;
-            case 'help': help(); break;
-            case 'prefix':
-                if (!method || !method.name || method.name === 'show')
-                    message.channel.send(`Current prefix: **${cfg.prefix}**\nChange prefix: \`${cfg.prefix}.prefix.change(newprefix)\``)
-    
-                else if (method.name === 'change' && method.args && method.args.length === 1)  {
-                    let oldprefix = cfg.prefix
-                    cfg.prefix = method.args[0]
-                    message.channel.send(`Prefix changed: **${oldprefix}** -> **${cfg.prefix}**`)
-                } break;
-            default:
-                if (message.member.roles.cache.has(cfg.adminRoleId)) {
-                    if (Object.keys(cfg.servers).includes(fn.name)) {
-                        const { name, address, password } = cfg.servers[fn.name]
-    
-                        let command = (!method || !method.name) ? 'status' : method.name
-                        let rcon = connect({ address, password })
+            try {
+                rcon = connect({ address, password })
+                await rcon.connect();
+            } catch (e) {
+                console.log(e);
+                interaction.reply('An error occured');
+            }
             
-                        rcon.connect().then(
-                            () => rcon.command(command).then(response => message.channel.send(`\`${response}\``))
-                        ).then(
-                            () => rcon.disconnect()
-                        ).catch(err => {
-                            message.channel.send('Error: ' + err)
-                            if (cfg.debug) {
-                                console.log('caught', err);
-                                console.log(err.stack);
-                            }
-                        });
-                    }
-                }
-                break;
-        }
+            const disconnected = serverName ? `Disconnected from ${serverName}.\n` : '';
+            serverName = name;
+
+            interaction.reply(`${disconnected}Connected to ${serverName}.`);
+        } 
+    },
+    {
+        data: new SlashCommandBuilder()
+            .setName('disconnect')
+            .setDescription('End RCON connection'),
+        execute: async (interaction) => {
+            try {
+                rcon.disconnect();
+                
+            } catch (e) {
+                console.log(e);
+                interaction.reply('An error occured');
+            } finally {
+                interaction.reply(`Disconnected from ${serverName}.`);
+                serverName = null;
+                rcon = null;
+            }
+        } 
+    },
+];
+
+loadCommands(commands);
+
+for (let command of commands) {
+    if ('data' in command && 'execute' in command) {
+        client.commands.set(command.data.name, command.execute);
+    } else {
+        console.log(`[WARNING] The command \"${command.name}\" is missing a required "data" or "execute" property.`);
     }
-    
+}
+
+client.once(Events.ClientReady, async c => {
+	console.log(`Bot ${c.user.tag} is ready to roll!`);
 });
 
-client.login(cfg.token)
+client.on(Events.InteractionCreate, async interaction => {
+	if (!interaction.isChatInputCommand()) return;
+    if (interaction.user.bot) return;
+
+    if (interaction.channel.id !== channelId) {
+        return;
+    }
+
+    if (!Array.from(interaction.member.roles.cache.keys()).includes(adminRoleId)) {
+        interaction.reply({
+            content: 'You have no access to use rcon commands.',
+            ephemeral: true
+        })
+    }
+
+	const command = interaction.client.commands.get(interaction.commandName);
+
+	if (!command) {
+		console.error(`No command matching ${interaction.commandName} was found.`);
+		return;
+	}
+
+	try {
+		await command(interaction);
+	} catch (error) {
+		console.error(`Error executing ${interaction.commandName}`);
+		console.error(error);
+	}
+});
+
+client.on(Events.MessageCreate, async message => {
+    if (message.author.bot) return;
+
+    if (rcon === null) {
+        message.reply('You need to be connected via rcon to run commands.\nUse `/connect` to set up a connection.');
+        return;
+    }
+
+    const command = message.content;
+    const response = await rcon.command(command);
+    const logRegex = /L\s\d{2}\/\d{2}\/\d{4}\s-\s\d{2}:\d{2}:\d{2}:(.*)/g;
+    const commandRegex = /\"\d+.\d+.\d+.\d+:\d+\":\scommand\s"(.*)"/g;
+    const end = '#end';
+    if (response) {
+        const formattedMessage = response
+            .replaceAll(logRegex, '')
+            .replaceAll(commandRegex, '')
+            .replace(end, '');
+        message.reply(`\`\`\`${formattedMessage}\`\`\``);
+    }
+})
+
+client.login(token);

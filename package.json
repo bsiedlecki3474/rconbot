@@ -1,6 +1,6 @@
 {
   "name": "rconbot",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "RCON bot for csgo",
   "main": "index.js",
   "scripts": {
@@ -9,7 +9,7 @@
   "author": "emKay#9189",
   "license": "ISC",
   "dependencies": {
-    "discord.js": "^12.4.1",
+    "discord.js": "^14.7.1",
     "srcds-rcon": "^2.2.1"
   }
 }
